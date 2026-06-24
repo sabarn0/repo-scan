@@ -39,13 +39,45 @@ var app = builder.Build();
 
 app.UseCors("CorsPolicy");
 app.UseHttpsRedirection();
+
+var browserPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "browser");
+if (Directory.Exists(browserPath))
+{
+    app.UseDefaultFiles(new DefaultFilesOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(browserPath),
+        RequestPath = ""
+    });
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(browserPath),
+        RequestPath = ""
+    });
+}
+else
+{
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+}
+
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<ScanHub>("/hubs/scan");
 
-// Automatically start Angular dev client in the background if the client folder exists
-var logger = app.Services.GetRequiredService<ILogger<Program>>();
-StartAngularClient(logger);
+if (Directory.Exists(browserPath))
+{
+    app.MapFallbackToFile("index.html", new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(browserPath)
+    });
+}
+
+// Automatically start Angular dev client in the background if the client folder exists and we're in Development mode
+if (app.Environment.IsDevelopment())
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    StartAngularClient(logger);
+}
 
 app.Run();
 

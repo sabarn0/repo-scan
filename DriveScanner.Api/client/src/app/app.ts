@@ -149,10 +149,14 @@ export class App implements OnInit, OnDestroy {
     this.sessionId = 'session_' + Math.random().toString(36).substr(2, 9);
     
     // Dynamically adjust API backend URL to current window host
-    const host = window.location.hostname;
-    const protocol = window.location.protocol;
-    const apiPort = protocol === 'https:' ? '7235' : '5224';
-    this.backendUrl = `${protocol}//${host}:${apiPort}`;
+    if (window.location.port === '4200') {
+      const host = window.location.hostname;
+      const protocol = window.location.protocol;
+      const apiPort = protocol === 'https:' ? '7235' : '5224';
+      this.backendUrl = `${protocol}//${host}:${apiPort}`;
+    } else {
+      this.backendUrl = window.location.origin;
+    }
     
     this.initSignalR();
   }
