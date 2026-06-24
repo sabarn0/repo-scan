@@ -40,37 +40,36 @@ var app = builder.Build();
 app.UseCors("CorsPolicy");
 app.UseHttpsRedirection();
 
+Microsoft.Extensions.FileProviders.IFileProvider fileProvider;
 var browserPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "browser");
 if (Directory.Exists(browserPath))
 {
-    app.UseDefaultFiles(new DefaultFilesOptions
-    {
-        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(browserPath),
-        RequestPath = ""
-    });
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(browserPath),
-        RequestPath = ""
-    });
+    fileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(browserPath);
 }
 else
 {
-    app.UseDefaultFiles();
-    app.UseStaticFiles();
+    fileProvider = new Microsoft.Extensions.FileProviders.ManifestEmbeddedFileProvider(typeof(Program).Assembly, "wwwroot/browser");
 }
+
+app.UseDefaultFiles(new DefaultFilesOptions
+{
+    FileProvider = fileProvider,
+    RequestPath = ""
+});
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = fileProvider,
+    RequestPath = ""
+});
 
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<ScanHub>("/hubs/scan");
 
-if (Directory.Exists(browserPath))
+app.MapFallbackToFile("index.html", new StaticFileOptions
 {
-    app.MapFallbackToFile("index.html", new StaticFileOptions
-    {
-        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(browserPath)
-    });
-}
+    FileProvider = fileProvider
+});
 
 // Automatically start Angular dev client in the background if the client folder exists and we're in Development mode
 if (app.Environment.IsDevelopment())

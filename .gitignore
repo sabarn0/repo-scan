@@ -20,3 +20,5 @@ node_modules/
 .angular/
 dist/
 wwwroot/
+
+DriveScanner.Api
