@@ -91,6 +91,7 @@
   border-radius: 12px;
   padding: 28px;
   box-shadow: 0 4px 20px rgba(25, 25, 25, 0.02);
+  min-width: 0;
 }
 
 .card-header {
@@ -350,6 +351,7 @@ input[disabled], select[disabled] {
   color: #7c725d;
   display: flex;
   gap: 6px;
+  min-width: 0;
 }
 
 .file-path {
@@ -516,4 +518,10 @@ input[disabled], select[disabled] {
   background-color: rgba(185, 28, 28, 0.06);
   border: 1px solid rgba(185, 28, 28, 0.15);
   color: #b91c1c;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
 }

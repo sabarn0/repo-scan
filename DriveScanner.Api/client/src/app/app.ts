@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, NgZone, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -113,9 +113,9 @@ export class App implements OnInit, OnDestroy {
   ];
 
   // Execution state
-  isScanning = false;
+  isScanning = signal(false);
   sessionId = '';
-  progress: ScanProgressUpdate = {
+  progress = signal<ScanProgressUpdate>({
     currentFile: '',
     filesScanned: 0,
     totalFilesFound: 0,
@@ -123,10 +123,10 @@ export class App implements OnInit, OnDestroy {
     categoryUniqueCounts: {},
     isCompleted: false,
     errorMessage: null
-  };
+  });
 
-  sampleMatches: ScanMatchEntry[] = [];
-  totalMatchesCount = 0;
+  sampleMatches = signal<ScanMatchEntry[]>([]);
+  totalMatchesCount = signal(0);
   selectedCategoryFilter = '';
   pageSize = 25;
   pageOffset = 0;
@@ -136,14 +136,14 @@ export class App implements OnInit, OnDestroy {
   }
 
   get totalPages(): number {
-    return Math.ceil(this.totalMatchesCount / this.pageSize) || 1;
+    return Math.ceil(this.totalMatchesCount() / this.pageSize) || 1;
   }
 
   // SignalR connection
   private hubConnection?: signalR.HubConnection;
   private backendUrl = 'http://localhost:5224'; // Matches dotnet launchSettings HTTP port
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient, private ngZone: NgZone) {}
 
   ngOnInit() {
     this.sessionId = 'session_' + Math.random().toString(36).substr(2, 9);
@@ -176,23 +176,26 @@ export class App implements OnInit, OnDestroy {
       .catch(err => console.error('Error starting SignalR: ', err));
 
     this.hubConnection.on('ReceiveProgress', (data: ScanProgressUpdate) => {
-      this.progress = data;
-      if (data.isCompleted) {
-        this.isScanning = false;
-        this.fetchSampleResults();
-      }
+      this.ngZone.run(() => {
+        this.progress.set(data);
+        if (data.isCompleted) {
+          this.isScanning.set(false);
+          console.log('Scan completed successfully!', data);
+          this.fetchSampleResults();
+        }
+      });
     });
   }
 
   startScan() {
-    this.isScanning = true;
-    this.sampleMatches = [];
-    this.totalMatchesCount = 0;
+    this.isScanning.set(true);
+    this.sampleMatches.set([]);
+    this.totalMatchesCount.set(0);
     this.pageOffset = 0;
     this.selectedCategoryFilter = '';
 
     // Reset progress UI display
-    this.progress = {
+    this.progress.set({
       currentFile: 'Starting scan...',
       filesScanned: 0,
       totalFilesFound: 0,
@@ -200,7 +203,7 @@ export class App implements OnInit, OnDestroy {
       categoryUniqueCounts: {},
       isCompleted: false,
       errorMessage: null
-    };
+    });
 
     // Parse blacklist and extensions
     const blacklist = this.blacklistInput
@@ -224,8 +227,10 @@ export class App implements OnInit, OnDestroy {
       .subscribe({
         next: () => console.log('Scan command sent successfully'),
         error: (err) => {
-          this.isScanning = false;
-          this.progress.errorMessage = 'Failed to trigger scan command: ' + (err.error || err.message);
+          this.isScanning.set(false);
+          const current = this.progress();
+          current.errorMessage = 'Failed to trigger scan command: ' + (err.error || err.message);
+          this.progress.set({ ...current });
         }
       });
   }
@@ -234,8 +239,10 @@ export class App implements OnInit, OnDestroy {
     this.http.post(`${this.backendUrl}/api/scan/cancel`, {})
       .subscribe({
         next: () => {
-          this.isScanning = false;
-          this.progress.currentFile = 'Scan cancelled by user.';
+          this.isScanning.set(false);
+          const current = this.progress();
+          current.currentFile = 'Scan cancelled by user.';
+          this.progress.set({ ...current });
         },
         error: (err) => console.error('Cancellation failed: ', err)
       });
@@ -246,15 +253,15 @@ export class App implements OnInit, OnDestroy {
     this.http.get<{ totalCount: number, sample: ScanMatchEntry[] }>(url)
       .subscribe({
         next: (res) => {
-          this.sampleMatches = res.sample;
-          this.totalMatchesCount = res.totalCount;
+          this.sampleMatches.set(res.sample);
+          this.totalMatchesCount.set(res.totalCount);
         },
         error: (err) => console.error('Error fetching samples: ', err)
       });
   }
 
   nextPage() {
-    if (this.pageOffset + this.pageSize < this.totalMatchesCount) {
+    if (this.pageOffset + this.pageSize < this.totalMatchesCount()) {
       this.pageOffset += this.pageSize;
       this.fetchSampleResults();
     }
@@ -279,8 +286,29 @@ export class App implements OnInit, OnDestroy {
     this.fetchSampleResults();
   }
 
+  isExporting = signal(false);
+
   downloadReport() {
-    window.open(`${this.backendUrl}/api/scan/export`, '_blank');
+    this.isExporting.set(true);
+    this.http.get(`${this.backendUrl}/api/scan/export`, { responseType: 'blob' })
+      .subscribe({
+        next: (blob) => {
+          this.isExporting.set(false);
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `ScanReport_${new Date().toISOString().replace(/[-:T]/g, '_').slice(0, 15)}.xlsx`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+        },
+        error: (err) => {
+          this.isExporting.set(false);
+          console.error('Error generating report: ', err);
+          alert('Failed to generate excel report: ' + err.message);
+        }
+      });
   }
 
   addCustomRule() {
