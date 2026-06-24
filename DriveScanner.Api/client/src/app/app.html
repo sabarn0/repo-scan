@@ -1,0 +1,268 @@
+<div class="app-container">
+  <!-- Header -->
+  <header class="app-header">
+    <div class="logo-area">
+      <div class="pulse-ring"></div>
+      <h1>Antigravity Drive Scanner</h1>
+    </div>
+  </header>
+
+  <!-- Main Grid -->
+  <div class="dashboard-grid">
+    
+    <!-- Left Panel: Configuration -->
+    <section class="card config-panel">
+      <div class="card-header">
+        <h2>Scan Configuration</h2>
+        <span class="subtitle">Setup targets and search patterns</span>
+      </div>
+      
+      <div class="form-group">
+        <label for="targetPath">Target Path</label>
+        <input 
+          id="targetPath"
+          type="text" 
+          [(ngModel)]="targetPath" 
+          placeholder="e.g. C:\Projects\MyApps" 
+          [disabled]="isScanning"
+        />
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="blacklist">Blacklisted Directories (Comma Separated)</label>
+          <input 
+            id="blacklist"
+            type="text" 
+            [(ngModel)]="blacklistInput" 
+            [disabled]="isScanning"
+          />
+        </div>
+        <div class="form-group">
+          <label for="extensions">Extensions to Scan (Comma Separated)</label>
+          <input 
+            id="extensions"
+            type="text" 
+            [(ngModel)]="extensionsInput" 
+            placeholder="Blank for all text files"
+            [disabled]="isScanning"
+          />
+        </div>
+      </div>
+
+      <!-- Rules Matrix -->
+      <div class="rules-section">
+        <div class="section-header">
+          <h3>Search Criteria Matrix</h3>
+          <button class="btn btn-secondary btn-sm" (click)="addCustomRule()" [disabled]="isScanning">
+            + Add Rule
+          </button>
+        </div>
+
+        <div class="rules-table-container">
+          <table class="rules-table">
+            <thead>
+              <tr>
+                <th>Category Name</th>
+                <th>Match Type</th>
+                <th>Pattern / Expression</th>
+                <th class="text-center">Sensitive?</th>
+                <th class="text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let rule of searchRules; let i = index">
+                <td>
+                  <input type="text" [(ngModel)]="rule.categoryName" [disabled]="isScanning" />
+                </td>
+                <td>
+                  <select [(ngModel)]="rule.searchType" [disabled]="isScanning">
+                    <option value="Regex">Regex</option>
+                    <option value="Literal">Literal</option>
+                    <option value="Wildcard">Wildcard</option>
+                  </select>
+                </td>
+                <td>
+                  <input class="code-input" type="text" [(ngModel)]="rule.patternValue" [disabled]="isScanning" />
+                </td>
+                <td class="text-center">
+                  <input type="checkbox" [(ngModel)]="rule.isSensitive" [disabled]="isScanning" />
+                </td>
+                <td class="text-center">
+                  <button class="btn-delete" (click)="removeRule(i)" [disabled]="isScanning">✕</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button 
+          *ngIf="!isScanning"
+          class="btn btn-primary btn-block" 
+          (click)="startScan()"
+        >
+          🚀 Start Drive Scan
+        </button>
+        <button 
+          *ngIf="isScanning"
+          class="btn btn-danger btn-block" 
+          (click)="cancelScan()"
+        >
+          🛑 Terminate Active Scan
+        </button>
+      </div>
+    </section>
+
+    <!-- Right Panel: Live Stats & Output -->
+    <section class="card stats-panel">
+      <div class="card-header">
+        <h2>Live Scan Diagnostics</h2>
+        <span class="subtitle" *ngIf="isScanning">Processing workspace...</span>
+        <span class="subtitle" *ngIf="!isScanning && progress.isCompleted">Workspace scan complete</span>
+        <span class="subtitle" *ngIf="!isScanning && !progress.isCompleted">Waiting to start</span>
+      </div>
+
+      <!-- Progression Bar -->
+      <div class="progress-bar-container" *ngIf="isScanning || progress.filesScanned > 0">
+        <div class="progress-info">
+          <span>Files Processed: <strong>{{ progress.filesScanned }} / {{ progress.totalFilesFound }}</strong></span>
+          <span class="percentage" *ngIf="progress.totalFilesFound > 0">
+            {{ (progress.filesScanned / progress.totalFilesFound * 100) | number:'1.0-0' }}%
+          </span>
+        </div>
+        <div class="progress-track">
+          <div 
+            class="progress-fill" 
+            [style.width.%]="progress.totalFilesFound > 0 ? (progress.filesScanned / progress.totalFilesFound * 100) : 0"
+          ></div>
+        </div>
+        <div class="current-file">
+          <span>Active File: </span>
+          <span class="file-path">{{ progress.currentFile }}</span>
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      <div class="error-banner" *ngIf="progress.errorMessage">
+        <strong>Error:</strong> {{ progress.errorMessage }}
+      </div>
+
+      <!-- Categories Count Matrix Grid -->
+      <div class="matrix-grid">
+        <div class="matrix-card" *ngFor="let rule of searchRules">
+          <div class="matrix-title">{{ rule.categoryName }}</div>
+          <div class="matrix-stats">
+            <div class="stat-box">
+              <span class="stat-val text-cyan">{{ progress.categoryMatchCounts[rule.categoryName] || 0 }}</span>
+              <span class="stat-lbl">Hits</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-val text-emerald">{{ progress.categoryUniqueCounts[rule.categoryName] || 0 }}</span>
+              <span class="stat-lbl">Unique</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Completion Actions -->
+      <div class="completion-box" *ngIf="progress.isCompleted && !isScanning">
+        <div class="status-success">✓ Workspace Scan Complete!</div>
+        <button class="btn btn-success btn-lg" (click)="downloadReport()">
+          📊 Download Multi-Sheet Excel Report
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Bottom Panel: Sample Matches Preview -->
+  <section class="card results-panel" *ngIf="sampleMatches.length > 0">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+      <div>
+        <h2>Scan Results Preview</h2>
+        <span class="subtitle">
+          Showing matches for: <strong>{{ selectedCategoryFilter || 'All Categories' }}</strong>
+        </span>
+      </div>
+      
+      <!-- Filters and Records Per Page controls -->
+      <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+        
+        <div class="form-group" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+          <label style="margin: 0; white-space: nowrap; font-size: 11px;">Category Filter:</label>
+          <select style="width: auto; padding: 6px 12px; font-size: 13px;" [(ngModel)]="selectedCategoryFilter" (change)="selectFilter(selectedCategoryFilter)">
+            <option value="">All Categories</option>
+            <option *ngFor="let rule of searchRules" [value]="rule.categoryName">{{ rule.categoryName }}</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+          <label style="margin: 0; white-space: nowrap; font-size: 11px;">Records Per Page:</label>
+          <select style="width: auto; padding: 6px 12px; font-size: 13px;" [(ngModel)]="pageSize" (change)="selectPageSize(pageSize)">
+            <option [value]="25">25</option>
+            <option [value]="50">50</option>
+            <option [value]="100">100</option>
+            <option [value]="250">250</option>
+            <option [value]="1000">1000</option>
+          </select>
+        </div>
+
+        <div class="badge badge-secondary">{{ totalMatchesCount }} matches filtered</div>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>File</th>
+            <th class="text-center">Line</th>
+            <th>Sanitized Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let item of sampleMatches">
+            <td><span class="category-pill">{{ item.categoryName }}</span></td>
+            <td>
+              <div class="file-cell" [title]="item.filePath">
+                <strong>{{ item.fileName }}</strong>
+                <span class="sub-path">{{ item.filePath }}</span>
+              </div>
+            </td>
+            <td class="text-center code">{{ item.lineNumber }}</td>
+            <td>
+              <span 
+                class="sanitized-pill" 
+                [class.sensitive]="item.sanitizedValue === '******'" 
+                [title]="'Raw Match: ' + item.rawLine"
+                style="cursor: help;"
+              >
+                {{ item.sanitizedValue }}
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination Controls -->
+    <div class="pagination-controls" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; border-top: 1px solid #e8e5de; padding-top: 15px;">
+      <span class="subtitle">
+        Showing {{ pageOffset + 1 }} - {{ pageOffset + sampleMatches.length }} of {{ totalMatchesCount }}
+      </span>
+      <div class="pagination-buttons" style="display: flex; gap: 10px; align-items: center;">
+        <button class="btn btn-secondary btn-sm" (click)="prevPage()" [disabled]="pageOffset === 0">
+          ◀ Previous
+        </button>
+        <span style="font-size: 13px; font-weight: 600; color: #191919;">
+          Page {{ currentPage }} of {{ totalPages }}
+        </span>
+        <button class="btn btn-secondary btn-sm" (click)="nextPage()" [disabled]="pageOffset + pageSize >= totalMatchesCount">
+          Next ▶
+        </button>
+      </div>
+    </div>
+  </section>
+</div>
